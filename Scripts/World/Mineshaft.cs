@@ -42,6 +42,9 @@ public class Mineshaft : MonoBehaviour {
 
     private bool m_bFinishedOperation = false;
 
+    //Prevent button spamming to accelerate coroutine speed
+    private bool m_bCoroutineRunning = false;
+
     private void OnEnable()
     {
         SetInitialReferences();
@@ -209,7 +212,10 @@ public class Mineshaft : MonoBehaviour {
     {
         mineshaftOverseer.GetComponent<MineshaftOverseer>().SetManagedMineshaft(m_Index);
         m_bManaged = true;
-        StartCoroutine(Mine());
+        if (!m_bCoroutineRunning)
+        {
+            StartCoroutine(Mine());
+        }
     }
 
     public void UnassignOverseer(GameObject mineshaftOverseer)
@@ -220,7 +226,7 @@ public class Mineshaft : MonoBehaviour {
 
     public void ManualMine()
     {
-        if (!m_bManaged)
+        if (!m_bManaged && !m_bCoroutineRunning)
         {
             m_bManual = true;
             StartCoroutine(Mine());
@@ -231,6 +237,7 @@ public class Mineshaft : MonoBehaviour {
     {
         while (m_bManual || m_bManaged)
         {
+            m_bCoroutineRunning = true;
             if (!m_bTraveled && !m_bMined)
             {
                 m_TravelTime -= 1 * Time.deltaTime;
@@ -276,6 +283,7 @@ public class Mineshaft : MonoBehaviour {
                 m_Gui.RefreshText(m_Gui.gui_mMoney, m_Money);
 
                 m_DataManager.CallEventSaveData();
+                m_bCoroutineRunning = false;
             }
             else if(m_bFinishedOperation && !m_bManaged)
             {
@@ -292,6 +300,7 @@ public class Mineshaft : MonoBehaviour {
                 m_Gui.RefreshText(m_Gui.gui_mMoney, m_Money);
 
                 m_DataManager.CallEventSaveData();
+                m_bCoroutineRunning = false;
             }
             m_Gui.RefreshText(m_Gui.gui_mTravelTime, m_TravelTime);
             m_Gui.RefreshText(m_Gui.gui_mMineTime, m_MineTime);

@@ -31,6 +31,8 @@ public class Elevator : MonoBehaviour {
     private float e_TravelTimeReset;
     private float e_TransportTimeReset;
 
+    private int e_LoadReset;
+
     public bool e_bManaged = false;
     private bool e_bManual = false;
 
@@ -38,6 +40,9 @@ public class Elevator : MonoBehaviour {
     private bool e_bTransported = false;
 
     private bool e_bFinishedOperation = false;
+
+    //Prevent button spamming to accelerate coroutine speed
+    private bool e_bCoroutineRunning = false;
 
     private void OnEnable()
     {
@@ -155,6 +160,7 @@ public class Elevator : MonoBehaviour {
 
         e_TravelTimeReset = e_TravelTime;
         e_TransportTimeReset = e_TransportTime;
+        e_LoadReset = e_Load;
 
         CalculateTransportTime();
         CalculateTravelTime();
@@ -190,10 +196,11 @@ public class Elevator : MonoBehaviour {
 
     public void AssignOverseer(GameObject elevatorOverseer)
     {
-        if(!e_bManaged && e_Level >= 5)
+        elevatorOverseer.GetComponent<ElevatorOverseer>().SetManagedElevator();
+        e_bManaged = true;
+
+        if (e_bCoroutineRunning)
         {
-            elevatorOverseer.GetComponent<ElevatorOverseer>().SetManagedElevator();
-            e_bManaged = true;
             StartCoroutine(Transport());
         }
     }
@@ -206,14 +213,18 @@ public class Elevator : MonoBehaviour {
 
     public void ManualTransport()
     {
-        e_bManual = true;
-        StartCoroutine(Transport());
+        if(!e_bManual && !e_bCoroutineRunning)
+        {
+            e_bManual = true;
+            StartCoroutine(Transport());
+        }
     }
 
     private IEnumerator Transport()
     {
         while (e_bManual || e_bManaged)
         {
+            e_bCoroutineRunning = true;
             if (!e_bTraveled && !e_bTransported)
             {
                 e_TravelTime -= 1 * Time.deltaTime;
@@ -249,15 +260,26 @@ public class Elevator : MonoBehaviour {
             {
                 for(int i = 0; i < GameMaster.instance.gm_mineshafts.Count; i++)
                 {
-                    if(e_Load <= GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney())
+                    if(e_Load > 0)
                     {
-                        e_Money += GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney();
-                        GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().SetMoney(GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney() - e_Money);
+                        if (e_Load <= GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney())
+                        {
+                            e_Money += e_Load;
+                            GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().SetMoney(GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney() - e_Money);
+                            break;
+                        }
+                        else
+                        {
+                            e_Money += e_Load - (e_Load - GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney());
+                            GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().SetMoney(GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney() - e_Money);
+                            e_Load -= Mathf.RoundToInt(e_Money);
+                        }
                     }
                 }
 
                 e_TravelTime = e_TravelTimeReset;
                 e_TransportTime = e_TransportTimeReset;
+                e_Load = e_LoadReset;
 
                 e_bFinishedOperation = false;
 
@@ -266,16 +288,32 @@ public class Elevator : MonoBehaviour {
                 e_Gui.RefreshText(e_Gui.gui_eMoney, e_Money);
 
                 e_DataManager.CallEventSaveData();
+                e_bCoroutineRunning = false;
             }
             else if (e_bFinishedOperation && !e_bManaged)
             {
-                e_Money += GameMaster.instance.gm_mineshafts[e_FloorIndex].GetComponent<Mineshaft>().GetMoney();
-
-                GameMaster.instance.gm_mineshafts[e_FloorIndex].GetComponent<Mineshaft>().SetMoney
-                    (GameMaster.instance.gm_mineshafts[e_FloorIndex].GetComponent<Mineshaft>().GetMoney() - e_Money);
+                for (int i = 0; i < GameMaster.instance.gm_mineshafts.Count; i++)
+                {
+                    if (e_Load > 0)
+                    {
+                        if (e_Load <= GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney())
+                        {
+                            e_Money += e_Load;
+                            GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().SetMoney(GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney() - e_Money);
+                            break;
+                        }
+                        else
+                        {
+                            e_Money += e_Load - (e_Load - GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney());
+                            GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().SetMoney(GameMaster.instance.gm_mineshafts[i].GetComponent<Mineshaft>().GetMoney() - e_Money);
+                            e_Load -= Mathf.RoundToInt(e_Money);
+                        }
+                    }
+                }
 
                 e_TravelTime = e_TravelTimeReset;
                 e_TransportTime = e_TransportTimeReset;
+                e_Load = e_LoadReset;
 
                 e_bManual = false;
                 e_bFinishedOperation = false;
@@ -285,6 +323,7 @@ public class Elevator : MonoBehaviour {
                 e_Gui.RefreshText(e_Gui.gui_eMoney, e_Money);
 
                 e_DataManager.CallEventSaveData();
+                e_bCoroutineRunning = false;
             }
             e_Gui.RefreshText(e_Gui.gui_eTravelTime, e_TravelTime);
             e_Gui.RefreshText(e_Gui.gui_eTransportTime, e_TransportTime);
@@ -300,6 +339,8 @@ public class Elevator : MonoBehaviour {
             e_LoadingSpeed += 1;
             e_MovementSpeed += 1f;
             e_Load += 10;
+
+            e_LoadReset = e_Load;
 
             e_Level += 1;
 

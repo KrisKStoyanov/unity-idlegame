@@ -37,6 +37,9 @@ public class Warehouse : MonoBehaviour {
 
     private bool w_bFinishedOperation = false;
 
+    //Prevent button spamming to accelerate coroutine speed
+    private bool w_bCoroutineRunning = false;
+
     private void OnEnable()
     {
         SetInitialReferences();
@@ -180,7 +183,10 @@ public class Warehouse : MonoBehaviour {
     {
         warehouseOverseer.GetComponent<WarehouseOverseer>().SetManagedWarehouse();
         w_bManaged = true;
-        StartCoroutine(Collect());
+        if (!w_bCoroutineRunning)
+        {
+            StartCoroutine(Collect());
+        }
 
         GameMaster.instance.SetIdleCash(w_Total);
     }
@@ -193,14 +199,18 @@ public class Warehouse : MonoBehaviour {
 
     public void ManualCollect()
     {
-        w_bManual = true;
-        StartCoroutine(Collect());
+        if(!w_bManual && !w_bCoroutineRunning)
+        {
+            w_bManual = true;
+            StartCoroutine(Collect());
+        }
     }
 
     private IEnumerator Collect()
     {
         while (w_bManual || w_bManaged)
         {
+            w_bCoroutineRunning = true;
             if (!w_bTraveled && !w_bCollected)
             {
                 w_TravelTime -= 1 * Time.deltaTime;
@@ -243,6 +253,8 @@ public class Warehouse : MonoBehaviour {
                 w_bFinishedOperation = false;
 
                 w_DataManager.CallEventSaveData();
+
+                w_bCoroutineRunning = false;
             }
             else if (w_bFinishedOperation && !w_bManaged)
             {
@@ -256,6 +268,8 @@ public class Warehouse : MonoBehaviour {
                 w_bFinishedOperation = false;
 
                 w_DataManager.CallEventSaveData();
+
+                w_bCoroutineRunning = false;
             }
             w_Gui.RefreshText(w_Gui.gui_wTravelTime, w_TravelTime);
             w_Gui.RefreshText(w_Gui.gui_wCollectTime, w_CollectTime);
